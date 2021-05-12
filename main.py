@@ -290,18 +290,20 @@ def validate(val_loader, model, criterion, epoch, log=None, tf_writer=None):
 
     # switch to evaluate mode
     model.eval()
-
     end = time.time()
+    all_preds = []
+    all_target = []
     with torch.no_grad():
         for i, (input, target) in enumerate(val_loader):
             target = target.cuda()
-
             # compute output
             output = model(input)
             loss = criterion(output, target)
 
             # measure accuracy and record loss
             prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
+            all_target.append(target.cpu().numpy())
+            all_preds.append(output.data.topk(5, 1, True, True)[1].cpu().numpy())
 
             losses.update(loss.item(), input.size(0))
             top1.update(prec1.item(), input.size(0))
@@ -330,6 +332,21 @@ def validate(val_loader, model, criterion, epoch, log=None, tf_writer=None):
     if log is not None:
         log.write(output + '\n')
         log.flush()
+
+    #import ipdb; ipdb.set_trace()
+    columns = ['idx','target','pred_1','pred_2', 'pred_3','pred_4','pred_5']
+    lines = []
+    with open('log/val_results_epoch{}.txt'.format(str(epoch)), 'w') as f:
+        for b in range(len(all_target)):
+            for i in range(len(all_target[b])):
+                preds_formatted = [s.rjust(6) for s in all_preds[b][i].astype(str).tolist()]
+                lines.append(str(all_target[b][i]).rjust(6)+'\t'+
+                        '\t'.join(preds_formatted))
+        header = '\t'.join([s.rjust(6) for s in columns])
+        f.write(header+'\n')
+        for i in range(len(lines)):
+            f.write(str(i).rjust(6)+'\t'+lines[i]+'\n')
+
 
     if tf_writer is not None:
         tf_writer.add_scalar('loss/test', losses.avg, epoch)
